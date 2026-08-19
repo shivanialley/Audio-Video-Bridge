@@ -23,12 +23,12 @@ def translate_segments(segments: list[dict], source_language: str, target_langua
     
     prompt = f"""
     You are an expert multilingual subtitle translator. 
-    Translate the 'text' field of each object in the JSON array below from source language '{source_language}' to target language '{target_language}'.
+    Translate the 'text' field of each object in the JSON array below from source language '{source_language}' into fluent, natural target language '{target_language}'.
     
     RULES:
     1. Output ONLY a valid JSON array matching the exact structure given, containing the exact same 'id' numbers.
     2. Do NOT omit, modify, or reorder the 'id' fields.
-    3. Ensure proper character encoding for Devanagari script (Hindi).
+    3. Translate all text completely and accurately into {target_language}.
     
     Input JSON:
     {json.dumps(payload, ensure_ascii=False)}
