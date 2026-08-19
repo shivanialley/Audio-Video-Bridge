@@ -23,12 +23,12 @@ def translate_segments(segments: list[dict], source_language: str, target_langua
     
     prompt = f"""
     You are an expert multilingual subtitle translator. 
-    Translate the 'text' field of each object in the JSON array below from source language '{source_language}' into fluent, natural target language '{target_language}'.
+    Translate the 'text' field of each object in the JSON array below from source language '{source_language}' completely and accurately into fluent, natural target language '{target_language}'.
     
     RULES:
-    1. Output ONLY a valid JSON array matching the exact structure given, containing the exact same 'id' numbers.
-    2. Do NOT omit, modify, or reorder the 'id' fields.
-    3. Translate all text completely and accurately into {target_language}.
+    1. Output ONLY a valid JSON array matching the exact structure given, containing the corresponding 'id' numbers.
+    2. Do NOT omit, modify, or reorder the array items.
+    3. Translate all text completely into {target_language}. Do not leave it in the source language.
     
     Input JSON:
     {json.dumps(payload, ensure_ascii=False)}
@@ -57,9 +57,16 @@ def translate_segments(segments: list[dict], source_language: str, target_langua
         for i, original_seg in enumerate(segments):
             new_text = original_seg["text"]  # Default fallback to original text if missing
             
-            # Match translation text safely by ID index
-            matched = next((item for item in translated_data if item.get("id") == i), None)
-            if matched and "text" in matched:
+            # Match translation text safely by ID index or position fallback
+            matched = None
+            if isinstance(translated_data, list):
+                # Try finding by explicit ID first
+                matched = next((item for item in translated_data if isinstance(item, dict) and item.get("id") == i), None)
+                # Fallback to positional index if ID lookup fails
+                if not matched and i < len(translated_data):
+                    matched = translated_data[i]
+
+            if matched and isinstance(matched, dict) and "text" in matched:
                 new_text = matched["text"]
 
             translated_segments.append({
