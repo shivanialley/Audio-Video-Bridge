@@ -18,7 +18,7 @@ The core design philosophy behind this project is **modularity, resilience, and 
 
 ## 🛠️ Key Decisions
 
-1. **Model Selection (`gemini-3.6-flash`):** 
+1. **Model Selection (`gemini-3.7-flash`):** 
    * Chosen over heavier models for its optimal balance of speed, low latency, and adherence to structured JSON output generation, which is critical for parsing subtitle segment arrays.
 2. **Stateless UI/API Integration:** 
    * The backend exposes RESTful endpoints managing temporary storage (`storage/uploads`, `storage/outputs`) and a local database (`jobs.db`) to track processing status cleanly.
