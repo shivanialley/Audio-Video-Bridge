@@ -16,4 +16,4 @@ COPY . .
 
 # Expose port and run uvicorn binding to 0.0.0.0 for external access
 EXPOSE 8000
-CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
