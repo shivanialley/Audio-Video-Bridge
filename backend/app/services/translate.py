@@ -36,7 +36,7 @@ def translate_segments(segments: list[dict], source_language: str, target_langua
 
     try:
         response = client.models.generate_content(
-            model='gemini-3.7-flash',
+            model='gemini-3.5-flash-lite',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3
