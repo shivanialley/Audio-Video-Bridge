@@ -44,14 +44,45 @@ def transcribe(audio_path: str, language_hint: str = "auto"):
     segments = []
     
     for idx, line in enumerate(lines):
+        start_str = f"00:00:{idx*2:02d},000"
+        end_str = f"00:00:{(idx+1)*2:02d},000"
+        
         segments.append({
             "id": idx + 1,
-            "start": f"00:00:{idx*2:02d},000",
-            "end": f"00:00:{(idx+1)*2:02d},000",
+            "start": parse_time_to_float(start_str),
+            "end": parse_time_to_float(end_str),
             "text": line
         })
 
     if not segments:
-        segments = [{"id": 1, "start": "00:00:00,000", "end": "00:00:05,000", "text": raw_text or "No speech detected"}]
+        segments = [{
+            "id": 1, 
+            "start": parse_time_to_float("00:00:00,000"), 
+            "end": parse_time_to_float("00:00:05,000"), 
+            "text": raw_text or "No speech detected"
+        }]
 
     return segments, language_hint
+
+
+def parse_time_to_float(val):
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        val = val.strip()
+        if ":" in val:
+            # Handles '00:00:00,000' format
+            val = val.replace(",", ".")
+            parts = val.split(":")
+            try:
+                if len(parts) == 3:
+                    return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+                elif len(parts) == 2:
+                    return float(parts[0]) * 60 + float(parts[1])
+            except ValueError:
+                pass
+        try:
+            return float(val)
+        except ValueError:
+            pass
+    return 0.0
