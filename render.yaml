@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: audio-bridge-translator
+    env: docker
+    plan: free
+    buildCommand: ""
+    startCommand: ""
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
