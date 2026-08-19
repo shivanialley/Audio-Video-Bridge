@@ -170,7 +170,7 @@ def get_video_summary(job_id: str) -> dict:
     
         prompt = f"Provide a comprehensive, clear, and structured summary of the key insights from this video transcript:\n\n{transcript_text}"
         response = client.models.generate_content(
-            model='gemini-3.6-flash',
+            model='gemini-3.7-flash',
             contents=prompt,
         )
     
@@ -207,7 +207,7 @@ def chat_with_video(payload: ChatRequest) -> dict:
     
     prompt = f"You are a helpful video intelligence assistant. Answer the user's question accurately using only information derived from the provided video transcript context.\n\nTranscript Context:\n{transcript_text}\n\nUser Question: {payload.question}"
     response = client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-3.7-flash',
         contents=prompt,
     )
     
