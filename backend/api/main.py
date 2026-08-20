@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+import ast
+import os
 import uuid
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -27,13 +29,19 @@ from app.services.pipeline import run_job
 
 from pydantic import BaseModel
 from google import genai
-import os
 
 executor = ThreadPoolExecutor(max_workers=2)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
+    # Migration safeguard: Ensure accuracy_score column exists in DB
+    try:
+        conn = database.get_db()
+        conn.execute("ALTER TABLE jobs ADD COLUMN accuracy_score INTEGER DEFAULT 0;")
+        conn.commit()
+    except Exception:
+        pass
     yield
 
 app = FastAPI(
@@ -88,13 +96,11 @@ async def create_job(
 
     conn = database.get_db()
     conn.execute(
-        "INSERT INTO jobs (id, status, stage_message, progress, original_filename, source_language, target_language, artifacts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (job_id, "queued", "Job queued in background pool", 0, file.filename, source_language, target_language, "{}")
+        "INSERT INTO jobs (id, status, stage_message, progress, original_filename, source_language, target_language, artifacts, accuracy_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (job_id, "queued", "Job queued in background pool", 0, file.filename, source_language, target_language, "{}", 0)
     )
     conn.commit()
 
-    # Pass both source and target language to the background processing pipeline
-    # Pass source_language first, then target_language
     executor.submit(run_job, job_id, dest_path, source_language, target_language)
     return {"job_id": job_id, "status": "processing"}
 
@@ -105,7 +111,6 @@ def get_job_status(job_id: str) -> dict:
     if row is None:
         raise HTTPException(404, "Job not found.")
 
-    import ast
     try:
         artifacts_dict = ast.literal_eval(row["artifacts"]) if row["artifacts"] else {}
     except Exception:
@@ -113,6 +118,10 @@ def get_job_status(job_id: str) -> dict:
 
     artifact_urls = {name: f"/api/jobs/{job_id}/artifacts/{name}" for name in artifacts_dict}
     
+    # Check accuracy score column safely
+    row_keys = row.keys() if hasattr(row, "keys") else []
+    score = row["accuracy_score"] if "accuracy_score" in row_keys and row["accuracy_score"] else 0
+
     return {
         "job_id": row["id"],
         "status": row["status"],
@@ -124,22 +133,30 @@ def get_job_status(job_id: str) -> dict:
         "has_video": bool(row["has_video"]),
         "error": row["error"],
         "artifacts": artifact_urls,
+        "accuracy_score": score,
     }
 
+# Handles both /artifacts/ (plural) and /artifact/ (singular) endpoints
 @app.get("/api/jobs/{job_id}/artifacts/{artifact_name}")
+@app.get("/api/jobs/{job_id}/artifact/{artifact_name}")
 def download_artifact(job_id: str, artifact_name: str):
+    job_dir = OUTPUT_DIR / job_id
+    
+    # Handle direct filename match for quality_audit.md
+    if artifact_name in ["quality_audit.md", "quality_report", "quality_audit"]:
+        path = job_dir / "quality_audit.md"
+        if path.exists():
+            return FileResponse(path, filename="quality_audit.md")
+
     conn = database.get_db()
     row = conn.execute("SELECT artifacts FROM jobs WHERE id=?", (job_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "Job not found.")
 
-    import ast
     artifacts_dict = ast.literal_eval(row["artifacts"]) if row["artifacts"] else {}
-    filename = artifacts_dict.get(artifact_name)
-    if not filename:
-        raise HTTPException(404, "Artifact not found for this job.")
+    filename = artifacts_dict.get(artifact_name, artifact_name)
 
-    path = OUTPUT_DIR / job_id / filename
+    path = job_dir / filename
     if not path.exists():
         raise HTTPException(404, "Artifact file is missing on disk.")
     return FileResponse(path, filename=f"{job_id}_{filename}")
@@ -147,13 +164,11 @@ def download_artifact(job_id: str, artifact_name: str):
 @app.get("/api/jobs/{job_id}/summary")
 def get_video_summary(job_id: str) -> dict:
     try:
-
         conn = database.get_db()
         row = conn.execute("SELECT artifacts FROM jobs WHERE id=?", (job_id,)).fetchone()
         if row is None:
             raise HTTPException(404, "Job not found.")
     
-        import ast
         artifacts_dict = ast.literal_eval(row["artifacts"]) if row["artifacts"] else {}
         srt_filename = artifacts_dict.get("translated_srt") or artifacts_dict.get("original_srt")
     
@@ -166,9 +181,7 @@ def get_video_summary(job_id: str) -> dict:
         
         transcript_text = srt_path.read_text(encoding="utf-8")
     
-        # Initialize the modern Google GenAI client (automatically picks up GEMINI_API_KEY)
         client = genai.Client()
-    
         prompt = f"Provide a comprehensive, clear, and structured summary of the key insights from this video transcript:\n\n{transcript_text}"
         response = client.models.generate_content(
             model='gemini-3.5-flash-lite',
@@ -190,7 +203,6 @@ def chat_with_video(payload: ChatRequest) -> dict:
     if row is None:
         raise HTTPException(404, "Job not found.")
     
-    import ast
     artifacts_dict = ast.literal_eval(row["artifacts"]) if row["artifacts"] else {}
     srt_filename = artifacts_dict.get("translated_srt") or artifacts_dict.get("original_srt")
     
@@ -203,9 +215,7 @@ def chat_with_video(payload: ChatRequest) -> dict:
     
     transcript_text = srt_path.read_text(encoding="utf-8")
     
-    # Initialize the modern Google GenAI client
     client = genai.Client()
-    
     prompt = f"You are a helpful video intelligence assistant. Answer the user's question accurately using only information derived from the provided video transcript context.\n\nTranscript Context:\n{transcript_text}\n\nUser Question: {payload.question}"
     response = client.models.generate_content(
         model='gemini-3.5-flash-lite',
@@ -222,5 +232,3 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
-
-    
