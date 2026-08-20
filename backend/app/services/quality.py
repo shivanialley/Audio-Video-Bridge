@@ -16,7 +16,7 @@ def evaluate_translation_quality(original_text: str, translated_text: str, targe
         # Initialize the modern Google GenAI client (picks up GEMINI_API_KEY)
         client = genai.Client()
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=eval_prompt,
         )
         return response.text
