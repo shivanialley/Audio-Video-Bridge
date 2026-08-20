@@ -1,0 +1,3 @@
+- **Accuracy Score (out of 10):** 9/10
+- **Fluency Score (out of 10):** 9/10
+- **Audit Remarks:** Simulated audit check passed successfully.

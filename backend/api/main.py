@@ -94,7 +94,8 @@ async def create_job(
     conn.commit()
 
     # Pass both source and target language to the background processing pipeline
-    executor.submit(run_job, job_id, dest_path, target_language, source_language)
+    # Pass source_language first, then target_language
+    executor.submit(run_job, job_id, dest_path, source_language, target_language)
     return {"job_id": job_id, "status": "processing"}
 
 @app.get("/api/jobs/{job_id}", response_model=JobStatusResponse)

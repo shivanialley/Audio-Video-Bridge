@@ -2,6 +2,9 @@ import asyncio
 import edge_tts
 from pathlib import Path
 from pydub import AudioSegment
+import subprocess
+import asyncio
+import edge_tts
 
 VOICE_MAP = {
     "es": "es-ES-AlvaroNeural",
@@ -58,3 +61,23 @@ def build_dubbed_audio(segments: list[dict], audio_paths: dict[int, Path], total
         
         combined = combined.overlay(clip, position=target_start_ms)
     return combined
+
+async def generate_dubbed_video(translated_segments: list[dict], input_video_path: str, output_video_path: str):
+    full_text = " ".join([seg["text"] for seg in translated_segments])
+    temp_audio = "temp_english_audio.mp3"
+    
+    # Generate English voice track using Microsoft Edge TTS
+    communicate = edge_tts.Communicate(full_text, "en-US-AriaNeural")
+    await communicate.save(temp_audio)
+    
+    # Merge audio into video using FFmpeg
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_video_path,
+        "-i", temp_audio,
+        "-c:v", "copy",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        output_video_path
+    ]
+    subprocess.run(cmd, check=True)

@@ -5,6 +5,7 @@ from pathlib import Path
 from backend.app.database import get_db, update_job_stage
 from backend.app.services import transcribe, translate
 from backend.app.services.srt_utils import generate_srt
+from app.services.quality import evaluate_translation_quality
 from app.config import OUTPUT_DIR
 
 def run_job(job_id: str, file_path: str, source_language: str, target_language: str):
@@ -25,16 +26,16 @@ def run_job(job_id: str, file_path: str, source_language: str, target_language: 
             audio_path=file_path, 
             language_hint=source_language
         )
-        print(f"[JOB {job_id}] Transcription complete! Detected/Used language: {detected_lang}")
+        print(f"[JOB {job_id}] Transcription complete! Detected language: {detected_lang}, Requested target: {target_language}")
         
-        # Generate and save original SRT file
+        # Generate and save original SRT file (always in the native/detected source language)
         original_srt_filename = "original.srt"
         original_srt_path = job_output_dir / original_srt_filename
         original_srt_content = generate_srt(segments)
         original_srt_path.write_text(original_srt_content, encoding="utf-8")
 
-        # Step 2: Translation using Gemini
-        print(f"[JOB {job_id}] Step 2: Translating transcript to {target_language}...")
+        # Step 2: Translation using Gemini (forces translation even if source and target look similar)
+        print(f"[JOB {job_id}] Step 2: Translating transcript from {detected_lang} to {target_language}...")
         update_job_stage(job_id, f"Translating lines into {target_language}...", progress=60)
         
         translated_segments = translate.translate_segments(
@@ -44,16 +45,34 @@ def run_job(job_id: str, file_path: str, source_language: str, target_language: 
         )
         print(f"[JOB {job_id}] Translation complete!")
         
-        # Generate and save translated SRT file
+        # Generate and save translated SRT file dynamically matching the target language code
         translated_srt_filename = f"translated_{target_language}.srt"
         translated_srt_path = job_output_dir / translated_srt_filename
         translated_srt_content = generate_srt(translated_segments)
         translated_srt_path.write_text(translated_srt_content, encoding="utf-8")
 
+        # Step 2.5: Run Quality & Accuracy Evaluation Audit
+        print(f"[JOB {job_id}] Step 2.5: Running AI Quality Audit...")
+        full_original_text = " ".join([seg["text"] for seg in segments])
+        full_translated_text = " ".join([seg["text"] for seg in translated_segments])
+        
+        quality_report = evaluate_translation_quality(
+            original_text=full_original_text, 
+            translated_text=full_translated_text, 
+            target_language=target_language
+        )
+        
+        # Save quality audit report as a text artifact file
+        quality_report_filename = "quality_audit.md"
+        quality_report_path = job_output_dir / quality_report_filename
+        quality_report_path.write_text(quality_report, encoding="utf-8")
+        print(f"[JOB {job_id}] Quality Audit Report generated successfully.")
+
         # Step 3: Package artifacts and complete processing pipeline
         artifacts = {
             "original_srt": original_srt_filename,
-            "translated_srt": translated_srt_filename
+            "translated_srt": translated_srt_filename,
+            "quality_report": quality_report_filename
         }
 
         conn = get_db()
