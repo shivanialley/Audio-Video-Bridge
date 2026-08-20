@@ -1,8 +1,6 @@
 from __future__ import annotations
 import os
-import openai
-
-client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "dummy-key"))
+from google import genai
 
 def evaluate_translation_quality(original_text: str, translated_text: str, target_language: str) -> str:
     eval_prompt = (
@@ -15,11 +13,13 @@ def evaluate_translation_quality(original_text: str, translated_text: str, targe
         "- **Audit Remarks / Nuance Critiques:** [Brief note]"
     )
     try:
-        res = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": eval_prompt}]
+        # Initialize the modern Google GenAI client (picks up GEMINI_API_KEY)
+        client = genai.Client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=eval_prompt,
         )
-        return res.choices[0].message.content
+        return response.text
     except Exception as e:
         print(f"[QUALITY EVAL ERROR]: {e}")
         return "- **Accuracy Score (out of 10):** 9/10\n- **Fluency Score (out of 10):** 9/10\n- **Audit Remarks:** Simulated audit check passed successfully."
@@ -32,7 +32,7 @@ def run_quality_audit(job_dir: str, original_segments: list[dict], translated_se
     orig_text = " ".join([seg["text"] for seg in original_segments])
     trans_text = " ".join([seg["text"] for seg in translated_segments])
 
-    # Run the evaluation
+    # Run the evaluation using Gemini
     audit_report = evaluate_translation_quality(orig_text, trans_text, target_language)
 
     # Save to quality_audit.md inside job_dir so FastAPI artifact routes find it
